@@ -1,0 +1,123 @@
+3.2 Problems:
+
+Simple Evaluation:
+
+a:
+(if (> 15 17) 16 18)
+(if (false) 16 18)
+-> 18
+
+b:
+(let ((x (+ 1 18))) (+ x 32)) : {}
+(let ((x 19)) (+ x 32)) : {}
+(+ x 32) : {x := 19}
+(+ 19 32)
+-> 51
+
+c:
+(let ((x 19)) (+ x 32)) : {}
+(+ x 32) : {x := 19}
+(+ 19 32)
+-> 51
+
+d:
+((lambda (x) (/ x 10)) 100) : {}
+(/ x 10) : {x := 100}
+(/ 100 10)
+-> 10
+
+Design Check Problems:
+
+a:
+((lambda (x y) ((lambda (x) (+ x y)) y)) 17 18) : {}
+((lambda (x) (+ x y)) y) : {x := 17, y := 18}
+(((lambda (x) (+ x y)) : {x := 17, y := 18}) (y : {x := 17, y := 18}))
+(((lambda (x) (+ x y)) : {x := 17, y := 18}) 18) 
+(+ x y) : {x := 18, y := 18}
+(+ 18 18)
+-> 36
+
+b:
+((lambda (x y) ((lambda (x) (+ x y)) (+ x y))) 17 18) : {}
+((lambda (x) (+ x y) (+ x y))) : {x := 17, y := 18}
+((lambda (x) (+ x y)) : {x := 17, y := 18}) ((+ x y) : {x := 17, y := 18}))
+(((lambda (x) (+ x y)) : {x := 17, y := 18}) (+ 17 18)) 
+(+ x y) : {x := 35, y := 18}
+(+ 35 18)
+-> 53
+
+c:
+(let ((a 100)) (let ((b 2)) (let ((f (lambda (x ) (let ((b a)) (+ a (+ b x )))))) (f 1)))) : {}
+(let ((b 2)) (let ((f (lambda (x ) (let ((b a)) (+ a (+ b x )))))) (f 1))) : {a := 100}
+(let ((f (lambda (x ) (let ((b a)) (+ a (+ b x )))))) (f 1)) : {a := 100, b := 2}
+(f 1) : {a := 100, b := 2, f = [(lambda (x ) (let ((b a)) (+ a (+ b x )))) ; {a := 100, b := 2}]}
+((lambda (x ) (let ((b a)) (+ a (+ b x )))) 1) : {a := 100, b := 2}
+(let ((b a)) (+ a (+ b x))) : {x := 1, a := 100, b := 2} 
+(+ a (+ b x)) : {x := 1, a := 100, b := 100} 
+(+ 100 (+ 100 1))
+(+ 100 101)
+-> 201
+
+d:
+(let ((a 0)) (let ((f (lambda (x ) (+ x a)))) (let ((a 1)) (let ((a 2)) (f 0))))) : {}
+(let ((f (lambda (x ) (+ x a)))) (let ((a 1)) (let ((a 2)) (f 0)))) : {a := 0}
+(let ((a 1)) (let ((a 2)) (f 0))) : {a := 0, f := [(lambda (x) (+ x a)) ; {a := 0}]}
+(let ((a 2)) (f 0)) : {a := 1, f := [(lambda (x) (+ x a)) ; {a := 0}]}
+(f 0) : {a := 2, f := [(lambda (x) (+ x a)) ; {a := 0}]}
+((lambda (x ) (+ x a)) 0) : {a := 0, f := [(lambda (x) (+ x a)) ; {a := 0}]}
+(+ x a) : {x := 0, a := 0}
+(+ 0 0)
+-> 0
+
+type abstract_syntax =
+| Remainder 
+| Equals ( = )
+| And
+| Or
+| Add
+| Subtract
+| Divide
+| Multiply
+| Num of int
+| Bool of bool
+| Identifier of string 
+| Lambda of abstract_syntax * abstract_syntax
+| Let of (abstract_syntax * abstract_syntax) * abstract_syntax
+| If of abstract_syntax * abstract_syntax * abstract_syntax
+| Proc of abstract_syntax * (abstract_syntax list) ;;
+
+Data Definition:
+Represent : (if (= x 3) true false) -> If(Proc(Equals, [Identifier("x") ; Num(3)]), Bool(true), Bool(false))
+Represent : (lambda (x) (+ x 15)) -> Lambda(Identifier("x"), Proc(Add, [Identifier("x") ; Num(15)]))
+Represent : (let ((x 16)) x) -> Let((Identifier("x"), Num(16)), Identifier)
+Represent : (let ((x 16)) (+ x 15)) -> Let((Identifier("x"), Num(16)), Proc(Add, [Identifier("x") ; Num(15)]))
+Represent : (/ 4 2) -> Proc(Divide, [Num(4) ; Num(2)])
+Represent : (Or (= x 3) (= (/ 4 2) x)) ->  Proc(Or, [Proc(Equals, [Identifier("x") ; Num(3)]) ; Proc(Equals, Proc(Divide, [Num(4), Num(2)]), Identifier("x")])])
+
+type value_syntax =
+| Primitive of string
+| Number of int 
+| Boolean of bool
+| Undef_Lambda (* (lambda (a1) ...) *);;
+
+Enviroment: is a list that keeps track of the current bindings
+Bindings : are a tuple of: string * value
+Value : is a constant, a primitive or a closure
+Closure : a pair of the lambda expression
+
+enivoroment_helper:
+- takes an expression and an enviroment and evaluates the expression within the enviroment
+- will follow the rules given in the semantics for evaluating the expressions in the enviroment using match cases
+
+eval_helper:
+- pattern matches all the primitve cases and evaluate with the proper ocaml primitive
+- if three element proc -> eval_helper (calls enviroment helper on the last two elements) 
+- if two element proc -> calls enviroment helper on the first and the second element
+- if it is a let then it add the binding to the enviroment
+- in the case that it is if -> if the first element is true the eval_helper (recurs on second element and otherwise eval_helper (the third element)
+
+eval:
+- call eval_helper -> eval_helper [] (input abstract_syntax)
+- then it will use matching to determine if the output of the helper matches num, bool or lambda which will then return the corresponding value syntax
+
+
